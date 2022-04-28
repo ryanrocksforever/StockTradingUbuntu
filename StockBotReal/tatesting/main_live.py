@@ -1,3 +1,4 @@
+#python 3.6.5
 import pandas
 import numpy as np
 import scipy
@@ -23,7 +24,6 @@ params = [-0.1, 0.5, 10]
 y3 = parabola3(x, *params)
 print("y3")
 #y3 = y3[0]
-
 #x3 = 0
 #list1 = [10, -21, 4, -45, 66, -93, 1]
 x3 = [-2, -1, 0, 1, 2]
