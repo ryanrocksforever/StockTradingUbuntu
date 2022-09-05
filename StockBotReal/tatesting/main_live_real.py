@@ -1,4 +1,4 @@
-# date 3-23-22
+# date 8-15-22
 import datetime
 import time
 
@@ -18,8 +18,8 @@ import sys
 import alpaca_trade_api as tradeapi
 from alpaca_trade_api.stream import Stream
 
-API_KEY = "PKEA6SOXUOGIZY6PQ8J7"
-API_SECRET = "EJe9TzECKGji8uPGySTyc3JJDCuJ5g7gx8UczOO7"
+API_KEY = "PK5GW86Z2UAVIFIAGTJO"
+API_SECRET = "9sVB6tyrpYAA7u6vdiNDzxBDGB26ga5MXdBSlWqT"
 APCA_API_BASE_URL = "https://paper-api.alpaca.markets"
 
 alpaca = tradeapi.REST(API_KEY, API_SECRET, APCA_API_BASE_URL, api_version='v2')
@@ -156,29 +156,30 @@ def filterParabolaSignals():
     global NewVal
     print("filtering parabolas")
     print(parabolas)
-    for index, val in enumerate(parabolas):
-        print(val)
-        plusthreshold = 0.000105
-        plusthresholdmax = 5
-        negthreshold = -0.000105
-        negthresholdmax = -5
-        if plusthreshold < float(parabolas[val][0]) < plusthresholdmax:
-            print("Good VAL Up")
-            print(str(plusthreshold) + "<" + str(float(parabolas[val][0])) + "<" + str(plusthresholdmax))
+    keys = list(parabolas.keys())
+    val = keys[-1]
+    print(val)
+    plusthreshold = 0.000105
+    plusthresholdmax = 5
+    negthreshold = -0.000105
+    negthresholdmax = -5
+    if plusthreshold < float(parabolas[val][0]) < plusthresholdmax:
+        print("Good VAL Up")
+        print(str(plusthreshold) + "<" + str(float(parabolas[val][0])) + "<" + str(plusthresholdmax))
+        goodparabolas[val] = parabolas[val]
+        finalactionlist[val] = "BUY"
+        print("NEW VALUE")
+        NewVal = True
+    else:
+        if negthreshold > parabolas[val][0] > negthresholdmax:
+            print("good down")
             goodparabolas[val] = parabolas[val]
-            finalactionlist[val] = "BUY"
+            finalactionlist[val] = "SELL"
             print("NEW VALUE")
             NewVal = True
         else:
-            if negthreshold > parabolas[val][0] > negthresholdmax:
-                print("good down")
-                goodparabolas[val] = parabolas[val]
-                finalactionlist[val] = "SELL"
-                print("NEW VALUE")
-                NewVal = True
-            else:
-                print(str(val) + " not within threshhold removing")
-                # parabolas.pop(val)
+            print(str(val) + " not within threshhold removing")
+            # parabolas.pop(val)
 
 
 def decidesignals2(signals):
@@ -186,37 +187,42 @@ def decidesignals2(signals):
 
     print(signals)
     for index, val in enumerate(signals):
+        try:
+            print(index)
+            print(val)
+            print("parabolas pressent")
+            # print(parabolas)
+            if val in parabolas or val < 20:
+                print("already made parabola")
+                continue
+            # if val <= 6:
+            #     continue
 
-        print(index)
-        print(val)
-        print("parabolas pressent")
-        # print(parabolas)
-        if val in parabolas or val < 20:
-            print("already made parabola")
-            continue
-        # if val <= 6:
-        #     continue
+            print("parabola deciding")
+            print(val)
+            print("#################################")
+            # print(ams)
+            y = ams[val - 25:]
+            y = y[~np.isnan(y)]
+            # y = y[:-1*(len(y)-val-5)]
+            print(y)
+            y = y.tolist()
+            filter(lambda v: v == v, y)
+            x = np.linspace(val - 25, val + 5, len(y))
+            filter(lambda v: v == v, x)
+            print(len(y))
+            print(x)
+            print(y)
+            plt.scatter(x[0], y[0])
+            plt.scatter(x[len(x) - 1], y[len(y) - 1])
+            print("#################################")
+            fit_params, pcov = scipy.optimize.curve_fit(parabola, x, y)
+            parabolas[val] = fit_params
+        except IndexError as e:
+            print("Index ERROR")
+            print(e)
+            parabolas[val] = None
 
-        print("parabola deciding")
-        print(val)
-        print("#################################")
-        # print(ams)
-        y = ams[val - 25:]
-        y = y[~np.isnan(y)]
-        # y = y[:-1*(len(y)-val-5)]
-        print(y)
-        y = y.tolist()
-        filter(lambda v: v == v, y)
-        x = np.linspace(val - 25, val + 5, len(y))
-        filter(lambda v: v == v, x)
-        print(len(y))
-        print(x)
-        print(y)
-        plt.scatter(x[0], y[0])
-        plt.scatter(x[len(x) - 1], y[len(y) - 1])
-        print("#################################")
-        fit_params, pcov = scipy.optimize.curve_fit(parabola, x, y)
-        parabolas[val] = fit_params
 
     print(parabolas)
     return parabolas
@@ -427,6 +433,7 @@ class livebroker:
         self.orders = orders
         self.difference = difference
         self.totalProfit = totalProfit
+        self.timeToClose = 100
 
     def awaitMarketOpen(self):
         global prediction
@@ -512,100 +519,105 @@ class livebroker:
         except:
             qty = self.getbuying()/alpaca.get_latest_bar("AAPL").c
             qty = qty*0.9
-        return qty
+        return 10
     def profit(self):
         account = alpaca.get_account()
         balance_change = float(account.equity) - float(account.last_equity)
         print(f'Today\'s portfolio balance change: ${balance_change}')
         return round(balance_change, 2)
 
+    def liquidate(self):
+        alpaca.close_all_positions()
+
     def buy(self, qty):
         print("Buy order Created with: " + str(qty) + " qty, ")
         currentPrice = cumulativeprices[-1]
         print("currunt price: " + str(currentPrice))
-        if self.totalQty == 0:
-            self.orders[currentPrice] = "BUY"
-            difference = 0
-            self.totalQty = qty
-            print("totalQty: " + str(self.totalQty))
+        # if totalQty == 0:
+        self.orders[currentPrice] = "BUY"
+        difference = 0
+        totalQty = qty
+        print("totalQty: " + str(totalQty))
+        print("Stop loss price: " + str((currentPrice * 0.90)-0.01))
+        alpaca.submit_order(
+            symbol="IBM",
+            qty=totalQty,
+            side='buy',
+            type='trailing_stop',
+            time_in_force='day',
+            trail_percent='1',
+            #order_class='oto',
+            #stop_loss={'stop_price': (currentPrice * 0.90)-0.01}
+        )
 
-            alpaca.submit_order(
-                symbol="IBM",
-                qty=self.totalQty,
-                side='buy',
-                type='market',
-                time_in_force='day',
-                order_class='oto',
-                stop_loss={'stop_price': currentPrice * 0.95}
-            )
 
-
-        else:
-            print("ALready In positon Liquidating")
-            prevOrder = list(orders.keys())[-1]
-            if self.orders[prevOrder] is not None:
-                # prevOrder = orders[-1]
-                prevOrderPrice = prevOrder
-                if self.totalQty < 0:
-                    difference = prevOrderPrice - currentPrice
-                    print("difference: " + str(difference))
-                    self.orders[currentPrice] = "BUY"
-                    self.totalQty = self.totalQty + qty
-                    print("totalQty: " + str(self.totalQty))
-
-                    alpaca.submit_order(
-                        symbol="IBM",
-                        qty=self.totalQty,
-                        side='buy',
-                        type='market',
-                        time_in_force='day',
-                        order_class='oto',
-                        stop_loss={'stop_price': currentPrice * 0.95}
-                    )
+        # else:
+        #     print("ALready In positon Liquidating")
+        #     prevOrder = list(orders.keys())[-1]
+        #     if self.orders[prevOrder] is not None:
+        #         # prevOrder = orders[-1]
+        #         prevOrderPrice = prevOrder
+        #         if totalQty < 0:
+        #             difference = prevOrderPrice - currentPrice
+        #             print("difference: " + str(difference))
+        #             self.orders[currentPrice] = "BUY"
+        #             totalQty = self.totalQty + qty
+        #             print("totalQty: " + str(totalQty))
+        #             print("Stop loss price: " + str((currentPrice * 0.90)-0.01))
+        #             alpaca.submit_order(
+        #                 symbol="IBM",
+        #                 qty=totalQty,
+        #                 side='buy',
+        #                 type='market',
+        #                 time_in_force='day'
+        #                 #order_class='oto',
+        #                 #stop_loss={'stop_price': (currentPrice * 0.90)-0.01}
+        #             )
 
     def sell(self, qty):
         print("SELL order Created with: " + str(qty) + " qty, ")
         currentPrice = cumulativeprices[-1]
         print("currunt price: " + str(currentPrice))
-        if self.totalQty == 0:
-            self.orders[currentPrice] = "SELL"
-            difference = 0
-            self.totalQty = -1 * qty
-            print("totalQty: " + str(self.totalQty))
+        # if totalQty == 0:
+        self.orders[currentPrice] = "SELL"
+        difference = 0
+        totalQty = -1 * qty
+        print("totalQty: " + str(totalQty))
+        print("Stop loss price: " + str((currentPrice * 1.1)+0.01))
+        alpaca.submit_order(
+            symbol="IBM",
+            qty=abs(totalQty),
+            side='sell',
+            type='trailing_stop',
+            time_in_force='day',
+            trail_percent='1',
+            #order_class='oto',
+            #stop_loss={'stop_price': (currentPrice * 1.1)+0.01}
+        )
 
-            alpaca.submit_order(
-                symbol="IBM",
-                qty=abs(self.totalQty),
-                side='sell',
-                type='market',
-                time_in_force='day',
-                order_class='oto',
-                stop_loss={'stop_price': currentPrice * 1.05}
-            )
 
-
-        else:
-            print("ALready In positon Liquidating")
-            prevOrder = list(orders.keys())[-1]
-            if self.orders[prevOrder] is not None:
-                # prevOrder = orders[-1]
-                prevOrderPrice = prevOrder
-                if self.totalQty > 0:
-                    difference = prevOrderPrice - currentPrice
-                    print("difference: " + str(difference))
-                    self.orders[currentPrice] = "SELL"
-                    self.totalQty = -1 * (self.totalQty + qty)
-                    print("totalQty: " + str(self.totalQty))
-
-                    alpaca.submit_order(
-                        symbol="IBM",
-                        qty=abs(self.totalQty),
-                        side='sell',
-                        type='market',
-                        time_in_force='day',
-                        order_class='oto',
-                        stop_loss={'stop_price': currentPrice * 1.05}
-                    )
+        # else:
+        #     print("ALready In positon Liquidating")
+        #     prevOrder = list(orders.keys())[-1]
+        #     if self.orders[prevOrder] is not None:
+        #         # prevOrder = orders[-1]
+        #         prevOrderPrice = prevOrder
+        #         if self.totalQty > 0:
+        #             difference = prevOrderPrice - currentPrice
+        #             print("difference: " + str(difference))
+        #             self.orders[currentPrice] = "SELL"
+        #             self.totalQty = -1 * (self.totalQty + qty)
+        #             print("totalQty: " + str(self.totalQty))
+        #             print("Stop loss price: " + str((currentPrice * 1.1)+0.01))
+        #             alpaca.submit_order(
+        #                 symbol="IBM",
+        #                 qty=abs(self.totalQty),
+        #                 side='sell',
+        #                 type='market',
+        #                 time_in_force='day'
+        #                 #order_class='oto',
+        #                 #stop_loss={'stop_price': (currentPrice * 1.1)+0.01}
+        #             )
 
     def reallivebroker(self, action, qty):
         if "BUY" in action:
@@ -681,20 +693,32 @@ def onTick(index, prices, livedata):
             # print(goodparabolas)
             filterParabolaSignals()
 
-            if NewVal is True:
+            if NewVal is True and list(finalactionlist.keys())[-1] not in plottedparabolas.keys():
+
                 position = getCurrentPosition()
+                print(position)
                 print("BUYING or SELLING")
                 NewVal = False
                 val = list(finalactionlist.keys())[-1]
                 action = finalactionlist[val]
                 print(val)
+                if val in plottedparabolas.keys():
+                    print("val bought already")
+                    # plt.plot(plottedparabolas[val][0], plottedparabolas[val][1])
+
+
+                else:
+                    print("val not bought already")
                 print("we actually want to " + action)
                 if action in "BUY":
                     if position not in "BUY":
                         print("BUY order")
-                        livebroker().reallivebroker(action="BUY", qty=BUYQTY)
+                        livebroker().reallivebroker(action="BUY", qty=BUYQTY*2)
                         print("totalQty: IN MAIN" + str(totalQty))
                     else:
+                        print("BUY order, already have bought some")
+                        #livebroker().reallivebroker(action="BUY", qty=BUYQTY)
+                        print("totalQty: IN MAIN" + str(totalQty))
                         print("already in " + position + " position we want to BUY")
                         print("orders")
                         print(orders)
@@ -702,9 +726,12 @@ def onTick(index, prices, livedata):
                 if action in "SELL":
                     print("SELL order")
                     if position not in "SELL":
-                        livebroker().reallivebroker(action="SELL", qty=BUYQTY)
+                        livebroker().reallivebroker(action="SELL", qty=BUYQTY*2)
                         print("totalQty: IN MAIN" + str(totalQty))
                     else:
+                        print("Sell order, already have Sold some")
+                        #livebroker().reallivebroker(action="SELL", qty=BUYQTY)
+                        print("totalQty: IN MAIN" + str(totalQty))
                         print("already in " + position + " position we want to SELL")
                         print("orders")
                         print(orders)
@@ -714,6 +741,9 @@ def onTick(index, prices, livedata):
                 print("finalactuionlist")
                 print(finalactionlist)
                 print("totalProfit: IN BUY " + str(totalProfit))
+
+            else:
+                print("val already bought: ")
 
             for index, val in enumerate(goodparabolas):
                 print(val)
@@ -743,13 +773,7 @@ def onTick(index, prices, livedata):
 
                 # print("NewVal: " + str(NewVal))
 
-                if val in plottedparabolas.keys():
-                    print("val bought already")
-                    # plt.plot(plottedparabolas[val][0], plottedparabolas[val][1])
-                    continue
 
-                else:
-                    print("val not bought already")
 
         for index, val in enumerate(xmaxs):
             print(val)
