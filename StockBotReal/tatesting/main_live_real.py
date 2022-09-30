@@ -528,6 +528,8 @@ class livebroker:
 
     def liquidate(self):
         alpaca.close_all_positions()
+        alpaca.cancel_all_orders()
+
 
     def buy(self, qty):
         print("Buy order Created with: " + str(qty) + " qty, ")
@@ -543,9 +545,9 @@ class livebroker:
             symbol="IBM",
             qty=totalQty,
             side='buy',
-            type='trailing_stop',
+            type='market',
             time_in_force='day',
-            trail_percent='1',
+            #trail_percent='3',
             #order_class='oto',
             #stop_loss={'stop_price': (currentPrice * 0.90)-0.01}
         )
@@ -588,9 +590,9 @@ class livebroker:
             symbol="IBM",
             qty=abs(totalQty),
             side='sell',
-            type='trailing_stop',
+            type='market',
             time_in_force='day',
-            trail_percent='1',
+           # trail_percent='3',
             #order_class='oto',
             #stop_loss={'stop_price': (currentPrice * 1.1)+0.01}
         )
@@ -713,7 +715,8 @@ def onTick(index, prices, livedata):
                 if action in "BUY":
                     if position not in "BUY":
                         print("BUY order")
-                        livebroker().reallivebroker(action="BUY", qty=BUYQTY*2)
+                        livebroker().liquidate()
+                        livebroker().reallivebroker(action="BUY", qty=BUYQTY)
                         print("totalQty: IN MAIN" + str(totalQty))
                     else:
                         print("BUY order, already have bought some")
@@ -726,7 +729,8 @@ def onTick(index, prices, livedata):
                 if action in "SELL":
                     print("SELL order")
                     if position not in "SELL":
-                        livebroker().reallivebroker(action="SELL", qty=BUYQTY*2)
+                        livebroker().liquidate()
+                        livebroker().reallivebroker(action="SELL", qty=BUYQTY)
                         print("totalQty: IN MAIN" + str(totalQty))
                     else:
                         print("Sell order, already have Sold some")
@@ -857,9 +861,13 @@ def runLiveTrading():
 
     # subscribing to event
     #stream.subscribe_quotes()
+
     stream.subscribe_bars(quote_callback, stock)
     # stream.subscribe_quotes(quote_callback, 'IBM')
     livebroker().awaitMarketOpen()
+
+    livebroker().liquidate()
+
     stream.run()
     livebroker().awaitMarketClose()
     stream.stop_ws()
